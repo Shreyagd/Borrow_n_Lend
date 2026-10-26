@@ -1,5 +1,5 @@
 import React from 'react';
-import { CartItem, FulfillmentMethod } from '../types';
+import { CartItem, FulfillmentMethod } from '../typesEditorial';
 
 interface OrderConfirmationModalProps {
   orderData: {

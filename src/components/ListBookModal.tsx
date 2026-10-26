@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookItem, BookCondition, BookType } from '../types';
+import { BookItem, BookCondition, BookType } from '../typesEditorial';
 
 interface ListBookModalProps {
   isOpen: boolean;

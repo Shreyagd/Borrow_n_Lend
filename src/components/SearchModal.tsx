@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BookItem } from '../types';
+import { BookItem } from '../typesEditorial';
 
 interface SearchModalProps {
   isOpen: boolean;

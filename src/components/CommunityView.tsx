@@ -6,7 +6,6 @@ interface CommunityViewProps {
 }
 
 export const CommunityView: React.FC<CommunityViewProps> = ({
-  onNavigate,
   onOpenListBook,
 }) => {
   const [discussionPosts, setDiscussionPosts] = useState([

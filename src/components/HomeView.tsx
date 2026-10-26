@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookItem, CartItem } from '../types';
+import { BookItem, CartItem } from '../typesEditorial';
 
 interface HomeViewProps {
   featuredBooks: BookItem[];

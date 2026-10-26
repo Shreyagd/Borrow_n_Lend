@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BookItem, CartItem } from '../types';
+import { BookItem, CartItem } from '../typesEditorial';
 
 interface BrowseBooksViewProps {
   books: BookItem[];
@@ -23,7 +23,7 @@ export const BrowseBooksView: React.FC<BrowseBooksViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [formatFilter, setFormatFilter] = useState<'all' | 'rental' | 'purchase'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedLocker, setSelectedLocker] = useState<string>('all');
+  const [selectedLocker] = useState<string>('all');
 
   const categories = [
     'All',

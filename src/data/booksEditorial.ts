@@ -1,4 +1,4 @@
-import { BookItem, CartItem, ActiveBorrow } from '../types';
+import { BookItem, CartItem, ActiveBorrow } from '../typesEditorial';
 
 export const INITIAL_CART_ITEMS: CartItem[] = [
   {

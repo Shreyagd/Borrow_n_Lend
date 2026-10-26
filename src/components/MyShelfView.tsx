@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActiveBorrow } from '../types';
+import { ActiveBorrow } from '../typesEditorial';
 
 interface MyShelfViewProps {
   activeBorrows: ActiveBorrow[];
@@ -17,7 +17,7 @@ export const MyShelfView: React.FC<MyShelfViewProps> = ({
   onOpenListBook,
 }) => {
   const [activeTab, setActiveTab] = useState<'borrows' | 'lending'>('borrows');
-  const [shelfCredits, setShelfCredits] = useState(15.0);
+  const [shelfCredits] = useState(15.0);
   const [selectedBorrowForPass, setSelectedBorrowForPass] = useState<ActiveBorrow | null>(null);
 
   // Books lent out by user (Clara)

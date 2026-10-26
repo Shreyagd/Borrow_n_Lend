@@ -5,10 +5,7 @@ interface HowItWorksViewProps {
   onOpenListBook: () => void;
 }
 
-export const HowItWorksView: React.FC<HowItWorksViewProps> = ({
-  onNavigate,
-  onOpenListBook,
-}) => {
+export const HowItWorksView: React.FC<HowItWorksViewProps> = () => {
   // Locker Simulator State
   const [pinInput, setPinInput] = useState('');
   const [unlockedCompartment, setUnlockedCompartment] = useState<number | null>(null);

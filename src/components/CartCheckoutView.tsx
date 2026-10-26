@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CartItem, BookItem, FulfillmentMethod, PaymentMethod } from '../types';
+import { CartItem, BookItem, FulfillmentMethod, PaymentMethod } from '../typesEditorial';
 
 interface CartCheckoutViewProps {
   cartItems: CartItem[];

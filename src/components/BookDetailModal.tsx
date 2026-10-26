@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookItem } from '../types';
+import { BookItem } from '../typesEditorial';
 
 interface BookDetailModalProps {
   book: BookItem | null;
@@ -88,7 +88,7 @@ export const BookDetailModal: React.FC<BookDetailModalProps> = ({
         {/* Lender Profile */}
         <div className="bg-white p-4 rounded-xl border border-[#e1ddd0] flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-[#c5ebd6] flex items-center justify-center font-bold text-[#04281a] font-serif text-[18px]">
-            {book.ownerName.split(' ').map((n) => n[0]).join('')}
+            {book.ownerName.split(' ').map((n: string) => n[0]).join('')}
           </div>
           <div className="flex-1">
             <h4 className="text-[15px] font-semibold text-[#1c1c17]">{book.ownerName}</h4>
