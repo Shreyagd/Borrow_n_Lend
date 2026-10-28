@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
 import { CATEGORIES, CONDITIONS, LISTING_TYPES, MAX_IMAGES, PERIOD_CHOICES } from '../lib/constants'
 import { useAsync, usePageMeta } from '../lib/hooks'
+import { coverExists, isValidIsbn, openLibraryCoverUrl } from '../lib/covers'
 import { validateListing, type FieldErrors } from '../lib/rules'
 import type { Listing, ListingInput, ListingType } from '../lib/types'
 
@@ -33,6 +34,8 @@ export default function ListingForm() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [coverMsg, setCoverMsg] = useState('')
+  const [coverBusy, setCoverBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [loaded, setLoaded] = useState(!editing)
@@ -86,6 +89,20 @@ export default function ListingForm() {
     }
   }
 
+  const fetchCover = async () => {
+    setCoverMsg('')
+    if (!isValidIsbn(v.isbn)) { setCoverMsg('Enter a valid 10 or 13 digit ISBN first.'); return }
+    if (v.image_urls.length >= MAX_IMAGES) { setCoverMsg(`You already have ${MAX_IMAGES} photos. Remove one first.`); return }
+    setCoverBusy(true)
+    const url = openLibraryCoverUrl(v.isbn)
+    if (v.image_urls.includes(url)) { setCoverMsg('That cover is already added.'); setCoverBusy(false); return }
+    const ok = await coverExists(url)
+    setCoverBusy(false)
+    if (!ok) { setCoverMsg('No cover found for that ISBN. You can upload your own photo instead.'); return }
+    set('image_urls', [url, ...v.image_urls])
+    setCoverMsg('Cover added from Open Library. It’s shown first; remove it with ✕ if it’s not right.')
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     const errs = validateListing(v)
@@ -127,7 +144,13 @@ export default function ListingForm() {
               <input id="lf-author" className={`input ${err('author')}`} maxLength={120} value={v.author} onChange={(e) => set('author', e.target.value)} />
             </Field>
             <Field label="ISBN (optional)" htmlFor="lf-isbn" error={errors.isbn}>
-              <input id="lf-isbn" className={`input ${err('isbn')}`} inputMode="numeric" value={v.isbn} onChange={(e) => set('isbn', e.target.value)} />
+              <div className="flex gap-2">
+                <input id="lf-isbn" className={`input ${err('isbn')}`} inputMode="numeric" value={v.isbn} onChange={(e) => { set('isbn', e.target.value); setCoverMsg('') }} />
+                <button type="button" className="btn-secondary shrink-0" onClick={fetchCover} disabled={coverBusy || !v.isbn.trim()}>
+                  {coverBusy ? <Spinner /> : 'Get cover'}
+                </button>
+              </div>
+              {coverMsg && <p role="status" className="mt-1 text-xs text-ink-soft">{coverMsg}</p>}
             </Field>
             <Field label="Category *" htmlFor="lf-category" error={errors.category}>
               <select id="lf-category" className={`input ${err('category')}`} value={v.category} onChange={(e) => set('category', e.target.value)}>
@@ -148,7 +171,7 @@ export default function ListingForm() {
 
         <section className="card space-y-3 p-5" aria-labelledby="s-photos">
           <h2 id="s-photos" className="text-xl">Photos</h2>
-          <p className="text-sm text-ink-soft">Up to {MAX_IMAGES} photos (JPG, PNG or WebP). The first is the cover. Without a photo, a plain cover is shown.</p>
+          <p className="text-sm text-ink-soft">Up to {MAX_IMAGES} photos (JPG, PNG or WebP). The first is the cover. Tip: enter the ISBN above and tap “Get cover” to fetch the standard cover, or upload a photo of your own copy. Without either, a plain cover is shown.</p>
           <ul className="flex flex-wrap gap-3">
             {v.image_urls.map((u, i) => (
               <li key={i} className="relative w-24">
@@ -188,7 +211,7 @@ export default function ListingForm() {
           {rent && (
             <div className="space-y-4">
               <Field label={`Rental price per week (${settings.currency}) *`} htmlFor="lf-rental_price" error={errors.rental_price}
-                hint={v.rental_price ? `Renters pay ${fmt((v.rental_price * 14) / 7)} for 14 days. You’d earn about ${fmt(((v.rental_price * 14) / 7) * (1 - settings.commission_pct / 100))} after the ${settings.commission_pct}% platform fee.` : undefined}>
+                hint={v.rental_price ? `Renters pay ${fmt((v.rental_price * 14) / 7)} for 14 days. You’d earn about ${fmt(((v.rental_price * 14) / 7) * (1 - settings.rental_commission_pct / 100))} after the ${settings.rental_commission_pct}% platform fee.` : undefined}>
                 <input id="lf-rental_price" type="number" min={1} step="0.5" inputMode="decimal" className={`input ${err('rental_price')}`}
                   value={v.rental_price ?? ''} onChange={(e) => set('rental_price', e.target.value === '' ? null : Number(e.target.value))} />
               </Field>
@@ -208,7 +231,7 @@ export default function ListingForm() {
           )}
           {sale && (
             <Field label={`Sale price (${settings.currency}) *`} htmlFor="lf-sale_price" error={errors.sale_price}
-              hint={v.sale_price ? `You’d earn about ${fmt(v.sale_price * (1 - settings.commission_pct / 100))} after the ${settings.commission_pct}% platform fee.` : undefined}>
+              hint={v.sale_price ? `You’d earn about ${fmt(v.sale_price * (1 - settings.sale_commission_pct / 100))} after the ${settings.sale_commission_pct}% platform fee.` : undefined}>
               <input id="lf-sale_price" type="number" min={1} step="0.5" inputMode="decimal" className={`input ${err('sale_price')}`}
                 value={v.sale_price ?? ''} onChange={(e) => set('sale_price', e.target.value === '' ? null : Number(e.target.value))} />
             </Field>

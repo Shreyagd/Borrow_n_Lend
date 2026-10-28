@@ -1,12 +1,14 @@
+import { useState } from 'react'
+
 // [background gradient start, end, text colour, accent band]
 const PALETTE: [string, string, string, string][] = [
-  ['#3b2fa0', '#5848d0', '#ecebff', '#f6dc94'],
-  ['#c4492f', '#ee8b73', '#fff4ef', '#fdf3d8'],
-  ['#12606b', '#2c8a94', '#e4f6f6', '#f6dc94'],
-  ['#6a3558', '#8d4d78', '#f8e8f2', '#eab7a6'],
-  ['#f0b94a', '#f7d27a', '#2a1c05', '#5848d0'],
-  ['#3d5a3a', '#587a52', '#eef6e8', '#eab7a6'],
-  ['#9a3f4a', '#c0606a', '#fdeeee', '#f3d98b'],
+  ['#244d3b', '#66806a', '#edf3e8', '#c5ebd6'],
+  ['#a04028', '#c46b4a', '#fff4ef', '#f1c8b9'],
+  ['#284d59', '#4c7a82', '#e4f1f0', '#efbf73'],
+  ['#6a4a3d', '#9a735c', '#f8eee5', '#eab7a6'],
+  ['#8a6a14', '#b89537', '#fff8dc', '#244d3b'],
+  ['#3d5a3a', '#72875b', '#eef6e8', '#eab7a6'],
+  ['#8c4850', '#b76869', '#fdeeee', '#f3d98b'],
 ]
 
 function hash(s: string) {
@@ -27,13 +29,15 @@ interface Props {
 
 /** Shows the uploaded cover photo, or a colourful typographic placeholder cover when there is none. */
 export function BookCover({ title, author, src, className = '', eager, size = 'md' }: Props) {
-  if (src) {
+  const [failed, setFailed] = useState<string | null>(null)
+  if (src && failed !== src) {
     return (
       <img
         src={src}
         alt={`Cover of ${title}${author ? ` by ${author}` : ''}`}
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
+        onError={() => setFailed(src)}
         width={300}
         height={400}
         className={`aspect-[3/4] w-full rounded-md bg-pine-light object-cover shadow-md ring-1 ring-black/5 ${className}`}

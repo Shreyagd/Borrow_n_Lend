@@ -22,7 +22,7 @@ describe('rental lifecycle', () => {
     const req = await api.rentals.request(L, 14)
     expect(req.status).toBe('requested')
     expect(req.rental_amount).toBe(80) // 40/wk * 14d
-    expect(req.platform_fee).toBe(8) // 10% dev default
+    expect(req.platform_fee).toBe(12) // 15% rental commission default
 
     await login('asha')
     expect((await api.rentals.respond(req.id, true)).status).toBe('accepted')

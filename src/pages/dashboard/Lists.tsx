@@ -7,6 +7,9 @@ import { useSettings } from '../../context/SettingsContext'
 import { useToast } from '../../context/ToastContext'
 import { api } from '../../lib/api'
 import { computeEarnings } from '../../lib/earnings'
+import { useAsync } from '../../lib/hooks'
+import { onlinePaymentsLive } from '../../lib/payments'
+import { PaymentChip, ReceiptDialog, SettlementChip } from '../../components/PaymentBits'
 import { dateShort } from '../../lib/format'
 import { useDash } from './DashboardLayout'
 import type { Listing } from '../../lib/types'
@@ -136,49 +139,78 @@ export function MyListings() {
 }
 
 export function Earnings() {
-  const { me, rentals, orders } = useDash()
+  const { me, rentals, orders, received } = useDash()
   const { fmt, settings } = useSettings()
-  const e = computeEarnings(me, rentals, orders)
+  const e = computeEarnings(me, rentals, orders, received)
+  const payout = useAsync(() => api.payments.payoutAccount(), [])
+  const live = onlinePaymentsLive(settings)
+  const tiles: [string, number, string?][] = [
+    ['Gross paid (verified)', e.gross, 'What customers paid online, net of refunds'],
+    ['Platform commission', e.commission, `Rentals ${settings.rental_commission_pct}% · sales ${settings.sale_commission_pct}%`],
+    ['Net earnings', e.net, 'Gross minus commission'],
+    ['Pending settlement', e.pendingSettlement, 'Paid by the customer, not yet in your account'],
+    ['Paid out', e.settled, 'Settled to your payout account'],
+    ['Refunded', e.refunded, 'Returned to customers'],
+  ]
+  const [receipt, setReceipt] = useState<string | null>(null)
+  const receiptPayment = received.find((p) => p.id === receipt) ?? null
   return (
     <div className="space-y-6">
-      <ul className="grid gap-3 sm:grid-cols-3">
-        {[['Earned (after fees)', e.net], ['Platform fees paid', e.fees], ['In progress', e.pending_net]].map(([l, v]) => (
-          <li key={l as string} className="card p-4"><p className="text-sm text-ink-soft">{l as string}</p><p className="font-sans text-2xl font-bold">{fmt(v as number)}</p></li>
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {tiles.map(([l, v, hint]) => (
+          <li key={l} className="card p-4"><p className="text-sm text-ink-soft">{l}</p><p className="font-serif text-2xl font-bold">{fmt(v)}</p>{hint && <p className="text-xs text-ink-mute">{hint}</p>}</li>
         ))}
       </ul>
-      <p className="rounded-lg bg-clay-light p-3 text-sm text-clay-dark">
-        Earnings shown are calculated from completed transactions at the {settings.commission_pct}% platform fee. BorrowLend does not pay out yet — payment is arranged directly with the borrower/buyer, and you can mark it received on each transaction.
-      </p>
+
+      <div className="card space-y-1 p-4 text-sm">
+        <p className="font-semibold">Payout account</p>
+        {payout.data
+          ? <p className="text-ink-soft">{payout.data.provider} · <strong>{payout.data.status}</strong>{payout.data.status !== 'active' && ' — online payments to you stay disabled until this is active.'}</p>
+          : <p className="text-ink-soft">Not set up. {live ? 'Online payments for your books are unavailable until BorrowLend support links your payout account.' : 'Online payouts are not live yet; payment is arranged directly with the customer.'}</p>}
+      </div>
+
+      {(e.manualNet > 0 || e.expectedNet > 0) && (
+        <p className="rounded-lg bg-clay-light p-3 text-sm text-clay-dark">
+          {e.manualNet > 0 && <>You recorded {fmt(e.manualNet)} as paid off-platform. This is unverified, so it isn’t counted above, and the {fmt(e.manualCommissionOwed)} commission on it has not been collected. </>}
+          {e.expectedNet > 0 && <>{fmt(e.expectedNet)} is expected from accepted deals that are not paid yet.</>}
+        </p>
+      )}
+
       {e.rows.length === 0 ? (
-        <EmptyState title="No earnings yet">Completed rentals and sales will appear here.</EmptyState>
+        <EmptyState title="No earnings yet">Accepted rentals and sales appear here with their payment and settlement status.</EmptyState>
       ) : (
         <>
           <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full min-w-[40rem] text-left text-sm">
+            <table className="w-full min-w-[46rem] text-left text-sm">
               <caption className="sr-only">Earnings history</caption>
-              <thead className="border-b border-line text-ink-mute"><tr><th className="py-2 pr-4">Item</th><th className="pr-4">Type</th><th className="pr-4">Date</th><th className="pr-4">Gross</th><th className="pr-4">Fee</th><th className="pr-4">Net</th><th>Status</th></tr></thead>
+              <thead className="border-b border-line text-ink-mute"><tr><th className="py-2 pr-4">Item</th><th className="pr-4">Type</th><th className="pr-4">Date</th><th className="pr-4">Gross</th><th className="pr-4">Commission</th><th className="pr-4">Net</th><th>Payment</th><th /></tr></thead>
               <tbody>
-                {e.rows.map((r) => (
-                  <tr key={r.id} className="border-b border-line/60">
-                    <td className="py-2.5 pr-4 font-medium">{r.title}</td><td className="pr-4 capitalize">{r.kind}</td><td className="pr-4">{dateShort(r.date)}</td>
-                    <td className="pr-4">{fmt(r.gross)}</td><td className="pr-4">−{fmt(r.fee)}</td><td className="pr-4 font-bold">{fmt(r.net)}</td>
-                    <td><StatusChip status={r.status} /> <span className="text-xs text-ink-mute">pay: {r.payment_status}</span></td>
-                  </tr>
-                ))}
+                {e.rows.map((r) => {
+                  const pay = received.find((p) => p.tx_id === r.id && p.status !== 'created')
+                  return (
+                    <tr key={r.kind + r.id} className="border-b border-line/60">
+                      <td className="py-2.5 pr-4 font-medium">{r.title}</td><td className="pr-4 capitalize">{r.kind}</td><td className="pr-4">{dateShort(r.date)}</td>
+                      <td className="pr-4">{fmt(r.gross)}</td><td className="pr-4">−{fmt(r.fee)}</td><td className="pr-4 font-semibold">{fmt(r.net)}</td>
+                      <td className="space-x-1"><PaymentChip status={r.payment_status} /><SettlementChip status={r.settlement_status} /></td>
+                      <td>{pay && <button className="text-xs font-semibold text-pine underline" onClick={() => setReceipt(pay.id)}>Statement</button>}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
           <ul className="space-y-2 sm:hidden">
             {e.rows.map((r) => (
-              <li key={r.id} className="card p-3 text-sm">
-                <div className="flex justify-between gap-2"><span className="font-medium">{r.title}</span><StatusChip status={r.status} /></div>
-                <p className="text-ink-mute capitalize">{r.kind} · {dateShort(r.date)}</p>
-                <p>{fmt(r.gross)} − {fmt(r.fee)} fee = <strong>{fmt(r.net)}</strong></p>
+              <li key={r.kind + r.id} className="card p-3 text-sm">
+                <div className="flex justify-between gap-2"><span className="font-medium">{r.title}</span><span className="font-semibold">{fmt(r.net)}</span></div>
+                <p className="text-ink-mute capitalize">{r.kind} · {dateShort(r.date)} · {fmt(r.gross)} − {fmt(r.fee)} commission</p>
+                <p className="mt-1 space-x-1"><PaymentChip status={r.payment_status} /><SettlementChip status={r.settlement_status} /></p>
               </li>
             ))}
           </ul>
         </>
       )}
+      {receiptPayment && <ReceiptDialog payment={receiptPayment} viewer="owner" onClose={() => setReceipt(null)} />}
     </div>
   )
 }

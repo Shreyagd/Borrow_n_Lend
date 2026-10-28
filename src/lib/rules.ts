@@ -12,6 +12,8 @@ export function platformFee(amount: number, commissionPct: number): number {
 }
 
 export interface Breakdown {
+  /** Commission % used for this breakdown (rental or sale rate). */
+  commissionPct: number
   lines: { label: string; amount: number; note?: string }[]
   total: number
   platformFee: number
@@ -22,6 +24,7 @@ export function rentalBreakdown(l: Pick<Listing, 'rental_price'>, days: number, 
   const amount = rentalAmount(l.rental_price ?? 0, days)
   const fee = platformFee(amount, commissionPct)
   return {
+    commissionPct,
     lines: [
       { label: `Rental (${days} days)`, amount },
       { label: 'Delivery', amount: 0, note: 'Local pickup – no delivery cost' },
@@ -37,6 +40,7 @@ export function saleBreakdown(l: Pick<Listing, 'sale_price'>, commissionPct: num
   const price = l.sale_price ?? 0
   const fee = platformFee(price, commissionPct)
   return {
+    commissionPct,
     lines: [
       { label: 'Book price', amount: price },
       { label: 'Delivery', amount: 0, note: 'Local pickup – no delivery cost' },

@@ -1,6 +1,6 @@
 import type {
-  AdminStats, HandoverInfo, Listing, ListingFilters, ListingInput, ListingPrivate, Notification, Order, Page,
-  Profile, PublicReview, Rental, Report, ReportTarget, ReviewSummary, Settings,
+  AdminStats, HandoverInfo, LedgerEntry, Listing, ListingFilters, ListingInput, ListingPrivate, Notification, Order, Page,
+  PayStart, Payment, PayoutAccount, Profile, PublicReview, ReconciliationReport, Rental, Report, ReportTarget, ReviewSummary, Settings,
 } from '../types'
 
 export interface AuthUser {
@@ -74,6 +74,21 @@ export interface Api {
     review(kind: TxKind, id: string, rating: number, comment: string): Promise<void>
   }
 
+  payments: {
+    /** Creates (or reuses) a payment attempt. Amounts come from the server, never from the caller. */
+    start(kind: TxKind, id: string): Promise<PayStart>
+    /**
+     * Asks the SERVER to confirm the payment with the provider. The browser's own "success" callback is never trusted:
+     * the status only changes if the provider confirms it (or, in demo mode, the demo is clearly labelled).
+     */
+    verify(kind: TxKind, id: string, proof?: { payment_id: string; signature?: string }): Promise<{ status: string }>
+    /** Payments I made. */
+    mine(): Promise<Payment[]>
+    /** Payments made to me as an owner/seller. */
+    forOwner(): Promise<Payment[]>
+    payoutAccount(): Promise<PayoutAccount | null>
+  }
+
   reviews: {
     recent(n: number): Promise<PublicReview[]>
     summary(): Promise<ReviewSummary>
@@ -99,10 +114,18 @@ export interface Api {
     setListingModeration(id: string, v: { hidden?: boolean; flagged?: boolean }): Promise<void>
     resolveReport(id: string, status: 'resolved' | 'dismissed', note: string, outcome?: string): Promise<void>
     updateSettings(s: Settings): Promise<void>
+    payments(): Promise<Payment[]>
+    ledger(limit?: number): Promise<LedgerEntry[]>
+    reconciliation(): Promise<ReconciliationReport>
+    refund(paymentId: string, amount: number, reason: string): Promise<void>
+    payoutAccounts(): Promise<PayoutAccount[]>
+    setPayoutAccount(ownerId: string, provider: 'razorpay' | 'cashfree', accountId: string, status: PayoutAccount['status']): Promise<void>
+    /** Polls the provider for settlement state (Edge Function). */
+    reconcileSettlements(): Promise<{ checked: number; updated: number }>
     /** Admin check for UI gating only; the server enforces it independently. */
     isAdmin(): Promise<boolean>
   }
 
   /** Demo mode only. */
-  demo?: { reset(): void }
+  demo?: { reset(): void; settle(paymentId: string): Promise<void> }
 }

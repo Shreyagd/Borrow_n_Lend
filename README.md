@@ -7,7 +7,8 @@ Peer-to-peer book rental and resale marketplace (pilot MVP). React + TypeScript 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # business-rule + lifecycle tests
+npm test           # business rules, payment/ledger flow, Razorpay signature + webhook mapping
+npm run test:sql   # runs every migration in an in-process Postgres and checks RLS, privileges, idempotency, ledger
 npm run lint && npm run build
 ```
 
@@ -16,7 +17,7 @@ npm run lint && npm run build
 ## Connect Supabase (real mode)
 
 1. Create a Supabase project.
-2. SQL editor: run `supabase/migrations/0001_schema.sql`, `0002_functions.sql`, `0003_policies_storage.sql` in order (or `supabase db push`).
+2. SQL editor: run `supabase/migrations/0001_schema.sql` … `0004_payments.sql` in order (or `supabase db push`). Payments stay **off** until you follow [docs/PAYMENTS.md](docs/PAYMENTS.md).
 3. Auth → Providers: enable Email. Decide whether to require email confirmation (the UI handles both). Set Site URL / redirect URLs to your deployed domain. Configure a real SMTP provider before launch.
 4. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project settings → API). Never use the `service_role` key in the frontend.
 5. Make yourself admin: sign up, then in the SQL editor run
@@ -31,9 +32,9 @@ Import the repo, framework "Vite", build `npm run build`, output `dist`. Add the
 
 ## Routes
 
-`/` · `/browse` · `/books/:id` · `/how-it-works` · `/about` `/contact` `/faq` `/terms` `/privacy` `/policies` · `/auth`
-Signed in: `/list`, `/list/:id`, `/account`, `/dashboard` (+ `/listings` `/requests` `/borrowings` `/purchases` `/earnings`)
-Admin: `/admin` (+ `/reports` `/users` `/listings` `/rentals` `/orders` `/settings`)
+`/` · `/browse` · `/books/:id` · `/saved` · `/request-list` · `/how-it-works` · `/about` `/contact` `/faq` `/terms` `/privacy` `/policies` · `/auth`
+Signed in: `/list`, `/list/:id`, `/account`, `/dashboard` (+ `/listings` `/requests` `/borrowings` `/purchases` `/payments` `/earnings`)
+Admin: `/admin` (+ `/reports` `/users` `/listings` `/rentals` `/orders` `/payments` `/settings`)
 
 ## Architecture & security
 
@@ -43,13 +44,16 @@ Admin: `/admin` (+ `/reports` `/users` `/listings` `/rentals` `/orders` `/settin
 - Private data: exact address, handover notes and phone live in `listing_private` / `profile_private`, readable only by the owner, admins, and a counterparty with an accepted deal.
 - Admin: `profiles.role` is protected by a trigger; admin reads/writes are gated by `is_admin()` in RLS and functions. The UI gate is cosmetic.
 - Rate limits: DB-enforced caps (10 requests/hour, 10 reports/hour, 20 listings/day per user). Add CAPTCHA/edge limits before scaling.
-- Pricing: rental price is per 7 days, prorated for 7/14/21/30-day periods. The platform fee is snapshotted on each request and deducted from the owner's earnings (not added to the customer's total).
+- Pricing: rental price is per 7 days, prorated for 7/14/21/30-day periods. A platform commission (default **15% on rentals, 10% on sales**, admin-only, server-stored) is snapshotted on each request and deducted from the owner's earnings, never added to the customer's total.
+- Payments: provider-neutral boundary with an append-only, idempotent ledger, settlements, signed-webhook handling, refunds and reconciliation (migration `0004`, Edge Functions in `supabase/functions/`). Only the server can mark a transaction `paid`; the browser, demo mode and owner notes never can. Full design, provider evaluation and go-live checklist: **[docs/PAYMENTS.md](docs/PAYMENTS.md)**.
 
 ## Complete vs. mocked/manual
 
+- **Editorial integration:** the home, browse, and saved routes use the Paper Haven inspired views and real BorrowLend listing APIs. Rental and purchase buttons open the existing listing details, where authenticated requests use the existing server-validated lifecycle. Covers, prices, conditions, owners, pickup areas, filters, pagination, and saved IDs map to real listing data.
+- **Prototype components not connected:** the pulled `CartCheckoutView`, `OrderConfirmationModal`, `MyShelfView`, `HowItWorksView`, and `CommunityView` contain simulated checkout, generated locker PINs, fictional deposits/escrow, seeded personal dashboards, or local-only community posts. They are intentionally not routed as operational flows. Use the real dashboard and `/how-it-works` page for those functions.
 - **Complete:** auth, listings CRUD + image upload, browse/search/filters/pagination, rental and order lifecycles, in-app notifications, reports/disputes, reviews, admin tools, configurable commission, tests.
 - **Manual / not built:**
-  - Payments: none. Users arrange payment directly; the owner can mark "received". The `payments` table is a placeholder for a future provider. No escrow, payouts, deposits, or late/damage fees.
+  - Payments: **built but switched off.** Razorpay Route integration (create order with owner transfer, hosted checkout, signed webhooks, refunds, settlement sync) is implemented and unit/SQL-tested, but has **not been run against a live provider** and needs provider marketplace approval, business/KYC verification and credentials (see docs/PAYMENTS.md). Cashfree Easy Split is evaluated, not implemented. Until then: owners can record an *unverified* off-platform payment (never revenue), and demo mode offers a labelled simulated checkout that never marks anything paid. No escrow, deposits, or automatic late/damage fees exist.
   - Email notifications: in-app only.
   - Delivery and distance/"nearby" search: not built. The location filter is a text match on pickup area.
   - Relevance sort in Supabase mode is newest-first among matches (demo mode scores matches).
@@ -58,9 +62,9 @@ Admin: `/admin` (+ `/reports` `/users` `/listings` `/rentals` `/orders` `/settin
 
 ## Launch checklist
 
-- [ ] Run the migrations on a real Supabase project and walk through the full flow with 2–3 accounts. The SQL has **not** been executed against a live database yet; only the demo backend that mirrors it was tested.
+- [ ] Run the migrations on a real Supabase project and walk through the full flow with 2–3 accounts. `npm run test:sql` runs the SQL in an in-process Postgres, but it has **not** been run on a real Supabase project.
 - [ ] Real SMTP, auth redirect URLs, email confirmation policy
-- [ ] Promote the first admin; set commission, currency and launch city in `/admin/settings` (10% is a dev assumption)
+- [ ] Promote the first admin; review commission rates (15% rentals / 10% sales are starting assumptions), currency and launch city in `/admin/settings`
 - [ ] Lawyer-reviewed Terms, Privacy and Rental policy; real contact email
-- [ ] Choose a payment provider and settle KYC/refund model before taking money
+- [ ] Before taking money: complete the checklist in [docs/PAYMENTS.md](docs/PAYMENTS.md) (provider approval, KYC/KYB, tax advice, legal review, test-mode run)
 - [ ] Backups, monitoring, CAPTCHA on sign-up

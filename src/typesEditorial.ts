@@ -1,6 +1,6 @@
 export type BookCondition = 'Mint' | 'Like New' | 'Very Good' | 'Good' | 'Acceptable';
 
-export type BookType = 'rental' | 'purchase';
+export type BookType = 'rental' | 'purchase' | 'both';
 
 export interface BookItem {
   id: string;
@@ -25,6 +25,10 @@ export interface BookItem {
   tagLabel?: string;
   notes?: string;
   isAccessory?: boolean;
+  /** Real marketplace fields used by the BorrowLend adapter. */
+  coverUrl?: string;
+  rentalPriceLabel?: string;
+  purchasePriceLabel?: string;
 }
 
 export interface CartItem extends BookItem {

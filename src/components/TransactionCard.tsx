@@ -5,10 +5,14 @@ import { useToast } from '../context/ToastContext'
 import { api, type TxKind } from '../lib/api'
 import { ORDER_STATUS_LABEL, RENTAL_STATUS_LABEL } from '../lib/constants'
 import { dateShort } from '../lib/format'
+import { IS_DEMO } from '../lib/env'
 import { useAsync } from '../lib/hooks'
+import { onlinePaymentsLive } from '../lib/payments'
 import { daysUntil } from '../lib/rules'
 import type { Order, Rental } from '../lib/types'
 import { BookCover } from './BookCover'
+import { PayDialog } from './PayDialog'
+import { PaymentChip, ReceiptDialog, SettlementChip } from './PaymentBits'
 import { ReportDialog } from './ReportDialog'
 import { Field, Modal, Spinner, StatusChip } from './ui'
 
@@ -87,11 +91,25 @@ function DeclineDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm:
   )
 }
 
+/** Loads the payment row for a transaction (RLS limits it to the payer/owner) and shows the receipt. */
+function ReceiptLoader({ kind, txId, viewer, onClose }: { kind: TxKind; txId: string; viewer: 'payer' | 'owner'; onClose: () => void }) {
+  const res = useAsync(async () => {
+    const rows = viewer === 'payer' ? await api.payments.mine() : await api.payments.forOwner()
+    return rows.find((p) => p.tx_kind === kind && p.tx_id === txId && p.status !== 'created') ?? null
+  }, [kind, txId, viewer])
+  if (res.data) return <ReceiptDialog payment={res.data} viewer={viewer} onClose={onClose} />
+  return (
+    <Modal title="Receipt" onClose={onClose}>
+      <p className="text-sm text-ink-soft">{res.loading ? 'Loading…' : res.error ?? 'No payment record was found for this transaction.'}</p>
+    </Modal>
+  )
+}
+
 export function TransactionCard({ tx, me, onChange }: { tx: Tx; me: string; onChange: () => void }) {
   const toast = useToast()
-  const { fmt } = useSettings()
+  const { fmt, settings } = useSettings()
   const [busy, setBusy] = useState(false)
-  const [dialog, setDialog] = useState<'decline' | 'dispute' | 'review' | 'report' | null>(null)
+  const [dialog, setDialog] = useState<'decline' | 'dispute' | 'review' | 'report' | 'pay' | 'receipt' | null>(null)
 
   const isRental = tx.kind === 'rental'
   const t = isRental ? tx.rental : tx.order
@@ -125,6 +143,11 @@ export function TransactionCard({ tx, me, onChange }: { tx: Tx; me: string; onCh
   const showHandover = isRental ? HANDOVER_VISIBLE.includes(status) : ['accepted', 'disputed'].includes(status)
   const canDispute = isRental ? ['active', 'return_requested', 'overdue'].includes(status) : status === 'accepted'
 
+  const online = onlinePaymentsLive(settings)
+  const unpaid = ['unpaid', 'failed', 'awaiting_payment'].includes(t.payment_status)
+  const readyToPay = isRental ? ['accepted', 'active', 'return_requested', 'overdue'].includes(status) : status === 'accepted'
+  const hasReceipt = ['paid', 'demo_simulated', 'refund_pending', 'partially_refunded', 'refunded'].includes(t.payment_status)
+
   const buttons: React.ReactNode[] = []
   const btn = (key: string, label: string, onClick: () => void, cls = 'btn-primary btn-sm') =>
     buttons.push(<button key={key} className={cls} disabled={busy} onClick={onClick}>{label}</button>)
@@ -139,7 +162,6 @@ export function TransactionCard({ tx, me, onChange }: { tx: Tx; me: string; onCh
   }
   if (status === 'accepted') {
     if (!myHandoverDone) btn('ho', 'Confirm handover', () => run(() => (isRental ? api.rentals.confirmHandover(t.id) : api.orders.confirmHandover(t.id)), 'Handover confirmed.'))
-    if (isProvider && t.payment_status === 'pending') btn('pay', 'Mark payment received', () => run(() => api.transactions.markPaymentReceived(kind, t.id), 'Marked as received.'), 'btn-secondary btn-sm')
     btn('can', 'Cancel', () => run(() => (isRental ? api.rentals.cancel(t.id) : api.orders.cancel(t.id)), 'Cancelled.'), 'btn-secondary btn-sm')
   }
   if (isRental && ['active', 'overdue'].includes(status)) {
@@ -147,9 +169,15 @@ export function TransactionCard({ tx, me, onChange }: { tx: Tx; me: string; onCh
     if (isProvider) btn('cr', 'Confirm book returned', () => run(() => api.rentals.confirmReturn(t.id), 'Return confirmed. Rental complete.'))
   }
   if (isRental && status === 'return_requested' && isProvider) btn('cr', 'Confirm book returned', () => run(() => api.rentals.confirmReturn(t.id), 'Return confirmed. Rental complete.'))
-  if (isProvider && t.payment_status === 'pending' && ['active', 'overdue', 'return_requested', 'completed'].includes(status) && (isRental || status === 'completed')) {
-    btn('pay2', 'Mark payment received', () => run(() => api.transactions.markPaymentReceived(kind, t.id), 'Marked as received.'), 'btn-secondary btn-sm')
+  // Customer pays online (provider) or tries the clearly-labelled demo checkout. Nothing is marked paid by the browser.
+  if (!isProvider && readyToPay && unpaid && (online || IS_DEMO)) {
+    btn('payonline', online ? 'Pay now' : 'Try demo checkout', () => setDialog('pay'), online ? 'btn-primary btn-sm' : 'btn-secondary btn-sm')
   }
+  // Without a live provider, the owner can note that payment happened off-platform. This is an unverified note, not revenue.
+  if (isProvider && !online && unpaid && (isRental ? ['accepted', 'active', 'return_requested', 'overdue', 'completed'].includes(status) : ['accepted', 'completed'].includes(status))) {
+    btn('pay2', 'Record payment received (unverified)', () => run(() => api.transactions.markPaymentReceived(kind, t.id), 'Noted as paid off-platform.'), 'btn-secondary btn-sm')
+  }
+  if (hasReceipt) btn('rcpt', isProvider ? 'Statement' : 'Receipt', () => setDialog('receipt'), 'btn-secondary btn-sm')
   if (status === 'completed' && !t.reviewed) btn('rv', 'Leave a review', () => setDialog('review'), 'btn-secondary btn-sm')
   if (canDispute) btn('dp', 'Open dispute', () => setDialog('dispute'), 'btn-danger btn-sm')
 
@@ -176,10 +204,11 @@ export function TransactionCard({ tx, me, onChange }: { tx: Tx; me: string; onCh
 
         <p className="text-sm text-ink-soft">
           {isRental ? `${tx.rental.period_days}-day rental · ` : 'Purchase · '}
-          {isProvider ? <>You earn <strong>{fmt(total - fee)}</strong> <span className="text-ink-mute">({fmt(total)} − {fmt(fee)} fee)</span></> : <>Total <strong>{fmt(total)}</strong></>}
+          {isProvider ? <>You earn <strong>{fmt(total - fee)}</strong> <span className="text-ink-mute">({fmt(total)} − {fmt(fee)} commission, {t.commission_pct}%)</span></> : <>Total <strong>{fmt(total)}</strong></>}
           {' · '}
-          <span title="Payment is arranged directly between users (no payment processor in the pilot)">
-            payment {t.payment_status === 'received' ? 'marked received' : 'pending (manual)'}
+          <span className="inline-flex flex-wrap items-center gap-1.5 align-middle">
+            <PaymentChip status={t.payment_status} />
+            {isProvider && <SettlementChip status={t.settlement_status} />}
           </span>
         </p>
 
@@ -221,6 +250,8 @@ export function TransactionCard({ tx, me, onChange }: { tx: Tx; me: string; onCh
       {dialog === 'dispute' && <ReportDialog kind="dispute" targetType={kind} targetId={t.id} onClose={() => setDialog(null)} onDone={onChange} />}
       {dialog === 'report' && <ReportDialog targetType="user" targetId={otherId} heading={`Report ${other?.display_name ?? 'this user'}`} onClose={() => setDialog(null)} />}
       {dialog === 'review' && <ReviewDialog kind={kind} id={t.id} onClose={() => setDialog(null)} onDone={onChange} />}
+      {dialog === 'pay' && <PayDialog kind={kind} tx={t} onClose={() => setDialog(null)} onDone={onChange} />}
+      {dialog === 'receipt' && <ReceiptLoader kind={kind} txId={t.id} viewer={isProvider ? 'owner' : 'payer'} onClose={() => setDialog(null)} />}
     </article>
   )
 }

@@ -1,364 +1,192 @@
-import React from 'react';
-import { BookItem, CartItem } from '../typesEditorial';
+import { motion } from 'framer-motion'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useSettings } from '../context/SettingsContext'
+import { onlinePaymentsLive } from '../lib/payments'
+import type { BookItem } from '../typesEditorial'
+import { BookCover } from './BookCover'
+import { BookTile, tileListVariants } from './BookTile'
+import { ArrowRightIcon, BookIcon, ChevronRightIcon, CheckCircleIcon, PlusIcon } from './Icons'
 
 interface HomeViewProps {
-  featuredBooks: BookItem[];
-  cartItems: CartItem[];
-  onAddToCart: (book: BookItem) => void;
-  onSelectBook: (book: BookItem) => void;
-  onNavigate: (tab: string) => void;
-  onOpenListBook: () => void;
+  featuredBooks: BookItem[]
+  onSelectBook: (book: BookItem) => void
+  onNavigate: (tab: string) => void
+  onOpenListBook: () => void
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({
-  featuredBooks,
-  cartItems,
-  onAddToCart,
-  onSelectBook,
-  onNavigate,
-  onOpenListBook,
-}) => {
+/** A small floating card in the hero arch. */
+function FloatCard({ book, onSelect, className, coverClass, tag, tagClass = 'bg-pine/90' }: {
+  book: BookItem; onSelect: (b: BookItem) => void; className: string; coverClass: string; tag?: string; tagClass?: string
+}) {
   return (
-    <div className="w-full">
-      {/* Editorial Hero Banner */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#f6f3ea] to-[#fcf9f0] border-b border-[#e1ddd0] py-16 sm:py-24">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Left Content (7 cols) */}
-            <div className="lg:col-span-7 space-y-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#c5ebd6] text-[#002114] text-[12px] font-bold tracking-wide">
-                <span className="material-symbols-outlined text-[16px] text-[#04281a]">
-                  verified
-                </span>
-                <span>North Central Ward Lending Network</span>
-              </div>
+    <button
+      onClick={() => onSelect(book)} aria-label={`View ${book.title}`}
+      className={`absolute cursor-pointer rounded-xl border border-sand bg-white p-2.5 text-left shadow-float transition-transform duration-300 hover:scale-105 ${className}`}
+    >
+      <div className={`relative flex items-center justify-center overflow-hidden rounded-lg bg-sand/50 ${coverClass}`}>
+        <BookCover title={book.title} author={book.author} src={book.coverUrl} className="!h-full !w-auto !rounded-sm" />
+        {tag && <span className={`absolute left-2 top-2 rounded px-2 py-0.5 text-[10px] font-bold text-white ${tagClass}`}>{tag}</span>}
+      </div>
+      <div className="mt-2.5">
+        <p className="truncate font-serif text-xs font-bold text-ink">{book.title}</p>
+        <p className="truncate text-[11px] text-ink-mute">{book.author}</p>
+        <p className="mt-1 truncate text-xs font-bold text-clay">{book.rentalPriceLabel ?? book.purchasePriceLabel}</p>
+      </div>
+    </button>
+  )
+}
 
-              <h1 className="font-serif text-[42px] sm:text-[54px] lg:text-[60px] leading-[1.08] text-[#04281a] font-semibold tracking-tight text-balance">
-                Your books can earn. Someone’s next story starts here.
-              </h1>
+export const HomeView = ({ featuredBooks, onSelectBook, onNavigate, onOpenListBook }: HomeViewProps) => {
+  const [tab, setTab] = useState('all')
+  const { settings } = useSettings()
+  const live = onlinePaymentsLive(settings)
+  const categories = useMemo(() => [...new Set(featuredBooks.map((b) => b.category))].slice(0, 6), [featuredBooks])
+  const shown = featuredBooks.filter((b) => tab === 'all' || b.category === tab).slice(0, 8)
+  const [a, b, c] = featuredBooks
 
-              <p className="text-[17px] sm:text-[19px] leading-relaxed text-[#414844] max-w-xl">
-                A warm neighborhood exchange for book lovers. Rent gently loved editions, buy beloved copies,
-                and share your personal library with 24/7 safe swap lockers and full deposit protection.
+  return (
+    <>
+      {/* ───────── hero ───────── */}
+      <section className="relative overflow-hidden pb-16 pt-8 lg:pb-24 lg:pt-16">
+        <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-10 -z-10 h-[400px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-clay/10 via-sand/40 to-pine/5 blur-3xl" />
+        <div className="container-page">
+          <div className="grid items-center gap-12 lg:grid-cols-12">
+            <div className="space-y-6 text-center lg:col-span-7 lg:text-left">
+              <motion.h1
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
+                className="text-4xl leading-[1.15] tracking-tight sm:text-5xl lg:text-6xl"
+              >
+                Your books can earn.<br />
+                <span className="font-normal italic text-clay">Someone’s next story</span> starts here.
+              </motion.h1>
+              <p className="mx-auto max-w-2xl text-lg font-light leading-relaxed text-ink-soft sm:text-xl lg:mx-0">
+                Discover pre-owned books to rent or buy from neighbours, or share your own shelf with book lovers in your local community.
               </p>
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-wrap items-center gap-4">
-                <button
-                  onClick={() => onNavigate('browse')}
-                  className="px-7 py-3.5 rounded-full bg-[#04281a] text-white text-[15px] font-semibold hover:bg-[#1c3e2f] shadow-md active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">explore</span>
-                  <span>Explore Catalog</span>
+              <div className="flex flex-col items-center justify-center gap-4 pt-2 sm:flex-row lg:justify-start">
+                <button onClick={() => onNavigate('browse')} className="btn-primary btn-lg group w-full gap-3 sm:w-auto">
+                  Browse books <ArrowRightIcon size={16} className="transition-transform group-hover:translate-x-1" />
                 </button>
-
-                <button
-                  onClick={onOpenListBook}
-                  className="px-6 py-3.5 rounded-full bg-[#a04028] text-white text-[15px] font-semibold hover:bg-[#74200a] shadow-md active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                  <span>Share Your Shelf</span>
-                </button>
-
-                <button
-                  onClick={() => onNavigate('how-it-works')}
-                  className="px-5 py-3.5 rounded-full text-[#1c1c17] text-[14px] font-semibold hover:bg-[#ebe8df] transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>How It Works</span>
-                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                </button>
+                <button onClick={onOpenListBook} className="btn-accent btn-lg w-full sm:w-auto"><BookIcon size={16} /> List a book</button>
+                <Link to="/how-it-works" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-pine no-underline transition-colors hover:text-clay">
+                  How it works <ChevronRightIcon size={14} />
+                </Link>
               </div>
-
-              {/* Social Proof Strip */}
-              <div className="pt-6 border-t border-[#e1ddd0]/80 grid grid-cols-3 gap-6 text-[#1c1c17]">
-                <div>
-                  <span className="font-serif text-[26px] sm:text-[30px] font-bold text-[#04281a] block">
-                    4,200+
-                  </span>
-                  <span className="text-[12px] text-[#414844]">Local loans completed</span>
-                </div>
-                <div>
-                  <span className="font-serif text-[26px] sm:text-[30px] font-bold text-[#a04028] block">
-                    12 Lockers
-                  </span>
-                  <span className="text-[12px] text-[#414844]">24/7 Library pickup pods</span>
-                </div>
-                <div>
-                  <span className="font-serif text-[26px] sm:text-[30px] font-bold text-[#04281a] block">
-                    100%
-                  </span>
-                  <span className="text-[12px] text-[#414844]">Deposit escrow protection</span>
-                </div>
+              <div className="grid grid-cols-1 gap-4 border-t border-sand/80 pt-8 text-left sm:grid-cols-3">
+                {[
+                  ['Local pickup', 'Arranged between you and the owner'],
+                  live ? ['Secure payment', 'UPI, cards & wallets via our provider'] : ['Direct payment', 'No online payment is collected yet'],
+                  ['Privacy first', 'Your address stays private'],
+                ].map(([h, p]) => (
+                  <div key={h} className="flex items-start gap-2.5">
+                    <CheckCircleIcon size={16} className="mt-0.5 shrink-0 text-clay" />
+                    <div><h4 className="font-sans text-xs font-bold uppercase tracking-wider text-pine">{h}</h4><p className="text-xs text-ink-mute">{p}</p></div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Right Visual Arch Composition (5 cols) */}
-            <div className="lg:col-span-5 flex justify-center">
-              <div className="relative w-full max-w-sm">
-                {/* Architectural background arch */}
-                <div className="w-full aspect-[4/5] bg-[#ebe8df] rounded-t-full rounded-b-2xl shadow-xl p-8 flex flex-col justify-between items-center relative overflow-hidden border border-[#e1ddd0]">
-                  {/* Decorative background sunlight shimmer */}
-                  <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-white/60 to-transparent pointer-events-none"></div>
-
-                  <div className="text-center pt-4">
-                    <span className="text-[11px] uppercase tracking-widest text-[#a04028] font-bold">
-                      Now Trending in North Ward
-                    </span>
-                    <h3 className="font-serif text-[22px] text-[#04281a] font-semibold mt-1">
-                      Atomic Habits
-                    </h3>
-                    <p className="text-[13px] text-[#414844]">By James Clear • Like New</p>
-                  </div>
-
-                  {/* 3D Elevated Book Mockup */}
-                  <div className="w-40 h-56 bg-[#faf7ee] rounded-md shadow-2xl flex flex-col justify-between p-4 text-center border-l-4 border-stone-300 relative transform -rotate-1 hover:rotate-0 transition-transform">
-                    <div className="space-y-2">
-                      <span className="text-[9px] uppercase tracking-wider text-[#a04028] font-bold">
-                        Bestseller
-                      </span>
-                      <p className="font-serif text-[15px] leading-tight text-[#04281a] font-bold">
-                        Atomic Habits
-                      </p>
-                    </div>
-                    <div className="border-t border-[#e1ddd0] pt-2">
-                      <p className="text-[11px] text-[#414844]">James Clear</p>
-                    </div>
-                    <div className="absolute top-0 right-4 w-3.5 h-10 bg-[#a04028] rounded-b-sm shadow-sm"></div>
-                  </div>
-
-                  {/* Micro badge chip at baseline */}
-                  <div className="w-full bg-white/90 backdrop-blur-xs py-2 px-4 rounded-xl flex items-center justify-between text-[12px] border border-[#e1ddd0]/80">
-                    <span className="text-[#04281a] font-bold">$3.50 / 2 wks</span>
-                    <button
-                      onClick={() => onNavigate('cart')}
-                      className="text-[#a04028] font-bold hover:underline flex items-center gap-1"
-                    >
-                      <span>In Cart</span>
-                      <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                    </button>
-                  </div>
+            {/* arch with floating real listings */}
+            <div className="relative flex justify-center lg:col-span-5">
+              <div className="relative flex h-96 w-72 items-center justify-center overflow-hidden rounded-t-full border border-sand bg-sand/60 shadow-inner sm:h-[420px] sm:w-80">
+                <div className="z-0 -translate-y-12 p-6 text-center">
+                  <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-clay">From the community</span>
+                  <h3 className="font-serif text-2xl font-bold text-pine">Real books, real listings</h3>
+                  <p className="mt-2 text-xs text-ink-mute">Shared by readers near you</p>
                 </div>
               </div>
+              {a && <FloatCard book={a} onSelect={onSelectBook} className="animate-float bottom-10 left-2 w-36 sm:left-6 sm:w-40" coverClass="h-44 sm:h-48" tag={a.category} />}
+              {b && <FloatCard book={b} onSelect={onSelectBook} className="animate-float-reverse bottom-4 z-10 w-40 !p-3 shadow-2xl sm:w-44" coverClass="h-48 sm:h-52" tag="Newest" tagClass="bg-clay" />}
+              {c && <FloatCard book={c} onSelect={onSelectBook} className="animate-float right-2 top-16 w-36 sm:right-6 sm:w-40" coverClass="h-40 sm:h-44" />}
+              {featuredBooks.length === 0 && (
+                <div className="absolute bottom-16 w-60 rounded-2xl bg-white/90 p-6 text-center text-sm text-ink-soft shadow-float">
+                  New listings will appear here. <Link className="mt-1 block font-semibold" to="/browse">Browse books</Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Featured Books Section */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-12 py-16">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-          <div>
-            <div className="flex items-center gap-2 mb-2 text-[#a04028] text-[11px] uppercase tracking-widest font-bold">
-              <span className="material-symbols-outlined text-[16px]">local_library</span>
-              <span>Curated Selection</span>
-            </div>
-            <h2 className="font-serif text-[32px] sm:text-[36px] text-[#04281a] font-semibold">
-              From Your Neighbors’ Shelves
-            </h2>
-            <p className="text-[15px] text-[#414844] mt-1">
-              Hand-picked books available for safe locker pickup in under 15 minutes.
-            </p>
-          </div>
-          <button
-            onClick={() => onNavigate('browse')}
-            className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#04281a] hover:text-[#a04028] transition-colors"
-          >
-            <span>View All Catalog</span>
-            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-          </button>
-        </div>
-
-        {/* 4 Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featuredBooks.slice(0, 4).map((book) => {
-            const inCart = cartItems.some((i) => i.id === book.id);
-
-            return (
-              <div
-                key={book.id}
-                className="bg-white rounded-xl p-5 shadow-xs flex flex-col justify-between group hover:shadow-md transition-all border border-[#e1ddd0]"
-              >
-                {/* Arch Alcove Book Cover */}
-                <div
-                  onClick={() => onSelectBook(book)}
-                  className="flex items-center justify-center p-6 bg-[#f6f3ea] rounded-t-full rounded-b-lg mb-4 cursor-pointer group-hover:bg-[#ebe8df]/70 transition-colors relative"
-                >
-                  <div className="w-20 h-28 bg-[#faf7ee] rounded shadow-md flex flex-col justify-between p-2 text-center border-l-2 border-stone-300 relative">
-                    <span
-                      className={`text-[8px] uppercase tracking-wider font-bold ${
-                        book.type === 'rental' ? 'text-[#a04028]' : 'text-[#04281a]'
-                      }`}
-                    >
-                      {book.category}
-                    </span>
-                    <p
-                      className={`font-serif text-[11px] leading-tight font-bold line-clamp-2 ${
-                        book.type === 'rental' ? 'text-[#04281a]' : 'text-[#a04028]'
-                      }`}
-                    >
-                      {book.title.split(':')[0]}
-                    </p>
-                    <p className="text-[8px] text-[#414844] truncate">{book.author}</p>
-                  </div>
-                  {book.type === 'rental' && (
-                    <div className="absolute top-2 right-4 w-2.5 h-6 bg-[#a04028] rounded-b-sm shadow-sm"></div>
-                  )}
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                        book.type === 'rental'
-                          ? 'text-[#04281a] bg-[#c5ebd6]'
-                          : 'text-[#3c0700] bg-[#ffdad2]'
-                      }`}
-                    >
-                      {book.type === 'rental'
-                        ? `$${book.rentalFee?.toFixed(2)} / wk`
-                        : `$${book.purchasePrice?.toFixed(2)} buy`}
-                    </span>
-                    <span className="text-[11px] text-[#414844]">{book.distance}</span>
-                  </div>
-
-                  <h3
-                    onClick={() => onSelectBook(book)}
-                    className="font-serif text-[16px] text-[#1c1c17] font-semibold line-clamp-1 hover:text-[#04281a] cursor-pointer"
-                  >
-                    {book.title}
-                  </h3>
-                  <p className="text-[13px] text-[#414844] mb-4">
-                    {book.author} • {book.condition}
-                  </p>
-
-                  <button
-                    onClick={() => !inCart && onAddToCart(book)}
-                    disabled={inCart}
-                    className={`w-full py-2 px-3 rounded-full text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      inCart
-                        ? 'bg-[#c5ebd6] text-[#002114] cursor-default'
-                        : 'bg-[#ebe8df] text-[#1c1c17] hover:bg-[#04281a] hover:text-white'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">
-                      {inCart ? 'done' : 'add'}
-                    </span>
-                    <span>{inCart ? 'In Your Basket' : 'Add to Locker Cart'}</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* How It Works Banner */}
-      <section className="bg-[#f6f3ea] py-16 border-y border-[#e1ddd0]">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12">
-          <div className="text-center max-w-2xl mx-auto mb-12 space-y-2">
-            <span className="text-[11px] uppercase tracking-widest text-[#a04028] font-bold">
-              The Peer-to-Peer Cycle
-            </span>
-            <h2 className="font-serif text-[32px] sm:text-[36px] text-[#04281a] font-semibold">
-              How Paper Haven Works
-            </h2>
-            <p className="text-[15px] text-[#414844]">
-              Zero shipping waste. No lost books. Built on neighborhood honor and community escrow.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Step 1 */}
-            <div className="bg-white p-7 rounded-2xl border border-[#e1ddd0] space-y-4">
-              <div className="w-12 h-12 rounded-full bg-[#c5ebd6] text-[#04281a] flex items-center justify-center font-bold text-[18px]">
-                1
-              </div>
-              <h3 className="font-serif text-[20px] text-[#1c1c17] font-semibold">
-                Browse &amp; Lock Dates
-              </h3>
-              <p className="text-[14px] leading-relaxed text-[#414844]">
-                Choose gently loved editions nearby. Reserve rental duration or purchase outright with
-                100% deposit escrow protection.
-              </p>
-            </div>
-
-            {/* Step 2 */}
-            <div className="bg-white p-7 rounded-2xl border border-[#e1ddd0] space-y-4">
-              <div className="w-12 h-12 rounded-full bg-[#ffdad2] text-[#3c0700] flex items-center justify-center font-bold text-[18px]">
-                2
-              </div>
-              <h3 className="font-serif text-[20px] text-[#1c1c17] font-semibold">
-                Collect 24/7 with PIN
-              </h3>
-              <p className="text-[14px] leading-relaxed text-[#414844]">
-                Receive a private 6-digit access code for your assigned safe swap locker compartment at
-                the library or choose zero-emission bicycle courier.
-              </p>
-            </div>
-
-            {/* Step 3 */}
-            <div className="bg-white p-7 rounded-2xl border border-[#e1ddd0] space-y-4">
-              <div className="w-12 h-12 rounded-full bg-[#efbf73]/40 text-[#4d3300] flex items-center justify-center font-bold text-[18px]">
-                3
-              </div>
-              <h3 className="font-serif text-[20px] text-[#1c1c17] font-semibold">
-                Read, Return &amp; Auto-Refund
-              </h3>
-              <p className="text-[14px] leading-relaxed text-[#414844]">
-                Enjoy reading at your pace. Drop back into the locker compartment by the due date to
-                have your deposit automatically released within 2 hours.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Community Lender Spotlight */}
-      <section className="max-w-7xl mx-auto px-6 lg:px-12 py-16">
-        <div className="bg-white rounded-2xl p-8 sm:p-12 border border-[#e1ddd0] shadow-sm flex flex-col lg:flex-row items-center gap-10">
-          <div className="flex-1 space-y-4">
-            <span className="text-[11px] uppercase tracking-widest text-[#a04028] font-bold">
-              Meet Your Shelf Host
-            </span>
-            <h2 className="font-serif text-[28px] sm:text-[34px] text-[#04281a] font-semibold">
-              &ldquo;Sharing my bookshelf helped me meet readers right on my block.&rdquo;
-            </h2>
-            <p className="text-[15px] leading-relaxed text-[#414844]">
-              Clara Vance has shared 24 books across North Central Ward, maintaining a pristine 4.9-star
-              rating. Readers love her thoughtful handwritten marginal notes and vintage bookmarks.
-            </p>
-            <div className="pt-2 flex items-center gap-6">
-              <button
-                onClick={() => onNavigate('browse')}
-                className="px-5 py-2.5 rounded-full bg-[#04281a] text-white text-[13px] font-semibold hover:bg-[#1c3e2f] transition-all cursor-pointer"
-              >
-                Browse Clara’s Shelf
-              </button>
-              <button
-                onClick={onOpenListBook}
-                className="text-[13px] font-semibold text-[#a04028] hover:underline cursor-pointer"
-              >
-                Become a Shelf Host →
-              </button>
-            </div>
-          </div>
-
-          <div className="shrink-0 flex items-center gap-4 bg-[#f6f3ea] p-6 rounded-2xl border border-[#e1ddd0]">
-            <img
-              alt="Clara Vance"
-              className="w-20 h-20 rounded-full object-cover ring-4 ring-[#c5ebd6]"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGr-Y3G49tokp_0QU9h-3mZ9zRoZJJuXp3GtxkkmLWAQDQ2sds1mn2-N9dH7HL1TZItKyzt6gKqb25a0CszKZzAbby5MhrHyK6y0dKcoMXNa9-fs0ZVEG1yxGhIxvRtfByoSqWDh6dMjAY6N-FLgCatoeuoGiWHlzT3Z-HGeYlgJVAn4nXXHsFvep0ylYoBuHqyRdhL0y3HL2NEy029qNwfzCI98PXwhiR3-7zmeWz3I_UI8brqgCV"
-            />
+      {/* ───────── recently listed ───────── */}
+      <section id="featured" className="border-y border-sand/60 bg-white py-16">
+        <div className="container-page">
+          <div className="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <h4 className="font-serif text-[18px] text-[#1c1c17] font-semibold">Clara Vance</h4>
-              <p className="text-[12px] text-[#414844]">North Central Ward • 24 Loans</p>
-              <div className="flex items-center gap-1 text-[12px] text-[#a04028] mt-1 font-bold">
-                <span>★ 4.9 Top Lender</span>
-              </div>
+              <span className="eyebrow mb-1 block">Recently listed</span>
+              <h2 className="text-3xl sm:text-4xl">Find your next read</h2>
+              <p className="mt-1 text-sm text-ink-mute">Explore titles available for rent or purchase in your area</p>
             </div>
+            {categories.length > 1 && (
+              <div className="no-scrollbar flex items-center gap-2 overflow-x-auto pb-2 md:pb-0" role="group" aria-label="Filter by genre">
+                {[['all', 'All books'], ...categories.map((c) => [c, c])].map(([v, l]) => (
+                  <button key={v} onClick={() => setTab(v)} aria-pressed={tab === v}
+                    className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all ${tab === v ? 'bg-pine text-sand' : 'bg-sand/60 text-ink-soft hover:bg-sand'}`}>{l}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {shown.length ? (
+            <motion.div key={tab} variants={tileListVariants} initial="hidden" animate="show" className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {shown.map((book) => <BookTile key={book.id} book={book} onSelect={onSelectBook} />)}
+            </motion.div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-line bg-paper p-12 text-center text-ink-soft">
+              No active listings yet. Be the first to <button onClick={onOpenListBook} className="font-bold text-clay underline">list a book</button>.
+            </div>
+          )}
+
+          <div className="mt-12 text-center">
+            <button onClick={() => onNavigate('browse')} className="inline-flex items-center gap-2 rounded-full border border-pine px-6 py-3 text-sm font-semibold text-pine transition-all hover:bg-pine hover:text-sand">
+              View all listings <ArrowRightIcon size={14} />
+            </button>
           </div>
         </div>
       </section>
-    </div>
-  );
-};
+
+      {/* ───────── how it works ───────── */}
+      <section id="how-it-works" className="relative py-20">
+        <div className="container-page">
+          <div className="mx-auto mb-16 max-w-2xl text-center">
+            <span className="eyebrow mb-2 block">Simple &amp; community-led</span>
+            <h2 className="text-3xl sm:text-4xl">How BorrowLend works</h2>
+            <p className="mt-2 text-sm text-ink-soft">Connecting book owners and readers locally in 3 effortless steps</p>
+          </div>
+          <div className="grid gap-8 md:grid-cols-3">
+            {[
+              ['01', 'Discover a book', 'Browse pre-loved books nearby. Filter by genre, condition or price, and see whether a book is for weekly rent or outright purchase.'],
+              ['02', 'Request to rent or buy', 'Choose a rental period or send a purchase request. The owner accepts or declines, and you see the full price before you confirm.'],
+              ['03', 'Arrange local pickup', live ? 'Once accepted, pay securely online, agree a time and place, and both confirm the handover in your dashboard.' : 'Once accepted, agree a time and place and pay the owner directly on handover; both of you confirm it in your dashboard.'],
+            ].map(([n, title, text]) => (
+              <motion.article key={n} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                className="group rounded-2xl border border-sand bg-white p-8 shadow-soft transition-all hover:shadow-md">
+                <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-clay-light font-serif text-xl font-bold text-clay transition-colors group-hover:bg-clay group-hover:text-white">{n}</div>
+                <h3 className="mb-3 text-xl text-pine">{title}</h3>
+                <p className="text-sm leading-relaxed text-ink-soft">{text}</p>
+              </motion.article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ───────── call to action ───────── */}
+      <section className="relative overflow-hidden bg-pine py-16 text-sand">
+        <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(#C04E2D_1px,transparent_1px)] opacity-10 [background-size:16px_16px]" />
+        <div className="relative z-10 mx-auto max-w-5xl space-y-6 px-4 text-center">
+          <h2 className="text-3xl leading-tight !text-white sm:text-5xl">
+            A good book deserves<br /><span className="font-normal italic text-clay">another reader.</span>
+          </h2>
+          <p className="mx-auto max-w-xl text-base font-light text-sand/80">
+            Give your books another chapter by listing them for rent or sale, and share your shelf with readers in your neighbourhood.
+          </p>
+          <div className="pt-4">
+            <button onClick={onOpenListBook} className="btn-accent btn-lg gap-2 shadow-xl hover:scale-105"><PlusIcon size={16} /> Share your shelf now</button>
+          </div>
+        </div>
+      </section>
+      <div aria-hidden="true" className="-mb-12 h-0" />
+    </>
+  )
+}
+

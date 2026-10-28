@@ -10,7 +10,7 @@ interface SettingsState {
 }
 
 // Fallback shown only until the real settings load (or if loading fails).
-const FALLBACK: Settings = { commission_pct: 10, currency: 'INR', launch_city: '' }
+const FALLBACK: Settings = { rental_commission_pct: 15, sale_commission_pct: 10, currency: 'INR', launch_city: '', payment_provider: 'manual', payments_live: false }
 const Ctx = createContext<SettingsState>({ settings: FALLBACK, fmt: (n) => money(n, 'INR'), reload: async () => {} })
 
 export function SettingsProvider({ children }: { children: ReactNode }) {

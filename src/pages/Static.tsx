@@ -37,7 +37,7 @@ export function HowItWorks() {
         <li>Hand over the book locally, confirm it, and confirm the return or sale. Your earnings are tracked in the dashboard.</li>
       </ol>
       <h2>Fees and payments (pilot)</h2>
-      <p>BorrowLend charges a platform fee on completed transactions, shown before you confirm and deducted from the owner’s earnings. During the pilot, payment is arranged directly between the two people at handover — BorrowLend does not hold funds or process payments yet.</p>
+      <p>BorrowLend takes a platform commission from the owner’s earnings on completed rentals and sales. It is shown before you confirm and is never added to what the customer pays. During the pilot, payment is arranged directly between the two people — BorrowLend does not hold funds or process payments yet. When online payments launch, you will pay by UPI, card, net banking or wallet through our payment provider, and the provider pays the owner out on its settlement schedule.</p>
       <h2>Safety</h2>
       <p>Your exact address and phone number stay private until a request is accepted. Meet in public places where possible. Use “Report” or “Open a dispute” if something goes wrong.</p>
     </Doc>
@@ -81,7 +81,7 @@ export function Terms() {
       <h2>3. Listings and conduct</h2>
       <p>[Draft] List only books you own and can lend or sell. Be honest about condition. No illegal, counterfeit or infringing items.</p>
       <h2>4. Fees</h2>
-      <p>[Draft] A platform fee applies to completed transactions as displayed before confirmation.</p>
+      <p>[Draft] A platform commission is deducted from the owner’s earnings on completed transactions, as displayed before confirmation. Payment-processing, tax and invoicing terms are to be finalized before online payments launch.</p>
       <h2>5. Liability</h2>
       <p>[Draft — requires legal review for the launch jurisdiction.]</p>
     </Doc>
@@ -113,11 +113,11 @@ export function Policies() {
       <h2>Late and damage fees</h2>
       <p>[Draft] BorrowLend does <strong>not</strong> automatically charge late or damage fees. A fee process will be introduced only after it is disclosed and legally reviewed.</p>
       <h2>Deposits and payments</h2>
-      <p>[Draft] No deposits are collected. During the pilot, payment is arranged directly between users; BorrowLend does not hold funds in escrow.</p>
+      <p>[Draft] No deposits are collected. During the pilot, payment is arranged directly between users. When online payments launch, the owner is paid by the payment provider on the provider’s settlement schedule; BorrowLend does <strong>not</strong> hold funds in escrow or release them on return unless and until that is offered, disclosed and legally reviewed.</p>
       <h2>Disputes</h2>
       <p>[Draft] Either party can open a dispute on an in-progress rental or accepted order. An admin reviews it and records an outcome.</p>
       <h2>Cancellations and refunds</h2>
-      <p>[Draft — to be defined with the payment provider.]</p>
+      <p>[Draft] Refunds for online payments are issued by an admin after reviewing a dispute, back to the original payment method, with the platform commission refunded in proportion. Timelines depend on the payment provider and your bank. Final cancellation and refund terms are to be defined with the payment provider and legal review.</p>
     </Doc>
   )
 }

@@ -6,14 +6,14 @@ import { dateShort } from '../../lib/format'
 import { daysUntil } from '../../lib/rules'
 
 export default function Overview() {
-  const { me, listings, rentals, orders } = useDash()
+  const { me, listings, rentals, orders, received } = useDash()
   const { fmt } = useSettings()
 
   const mine = (r: (typeof rentals)[number]) => r.owner_id === me
   const activeBorrowed = rentals.filter((r) => r.borrower_id === me && ['active', 'overdue', 'return_requested'].includes(r.status))
   const incoming = [...rentals.filter((r) => mine(r) && r.status === 'requested'), ...orders.filter((o) => o.seller_id === me && o.status === 'requested')]
   const completed = rentals.filter((r) => r.status === 'completed').length + orders.filter((o) => o.status === 'completed').length
-  const earnings = computeEarnings(me, rentals, orders)
+  const earnings = computeEarnings(me, rentals, orders, received)
 
   const actions: { key: string; text: string; to: string; urgent?: boolean }[] = []
   for (const r of rentals) {
@@ -74,11 +74,12 @@ export default function Overview() {
       <section aria-labelledby="earn" className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
           <h2 id="earn" className="text-xl">Earnings</h2>
-          <p className="text-sm text-ink-soft">Completed, after platform fees. Payment is settled directly between users.</p>
+          <p className="text-sm text-ink-soft">Verified online payments, after platform commission. Off-platform and demo payments are not counted.</p>
         </div>
         <div className="text-right">
-          <p className="font-sans text-3xl font-bold text-pine">{fmt(earnings.net)}</p>
-          {earnings.pending_net > 0 && <p className="text-xs text-ink-mute">+ {fmt(earnings.pending_net)} in progress</p>}
+          <p className="font-serif text-3xl font-bold text-pine">{fmt(earnings.net)}</p>
+          {earnings.pendingSettlement > 0 && <p className="text-xs text-ink-mute">{fmt(earnings.pendingSettlement)} pending settlement</p>}
+          {earnings.expectedNet > 0 && <p className="text-xs text-ink-mute">+ {fmt(earnings.expectedNet)} expected once paid</p>}
         </div>
       </section>
     </div>

@@ -7,11 +7,12 @@ import { useToast } from '../../context/ToastContext'
 import { api } from '../../lib/api'
 import { dateShort } from '../../lib/format'
 import { useAsync, usePageMeta } from '../../lib/hooks'
+import { IS_DEMO } from '../../lib/env'
 import type { Report, Settings } from '../../lib/types'
 
 const tabs: [string, string, boolean?][] = [
   ['/admin', 'Overview', true], ['/admin/reports', 'Reports'], ['/admin/users', 'Users'], ['/admin/listings', 'Listings'],
-  ['/admin/rentals', 'Rentals'], ['/admin/orders', 'Orders'], ['/admin/settings', 'Settings'],
+  ['/admin/rentals', 'Rentals'], ['/admin/orders', 'Orders'], ['/admin/payments', 'Payments'], ['/admin/settings', 'Settings'],
 ]
 
 export function AdminLayout() {
@@ -57,7 +58,8 @@ export function AdminOverview() {
   const s = res.data
   const tiles: [string, string | number][] = [
     ['Users', s.users], ['Suspended users', s.suspended_users], ['Live listings', s.listings], ['Hidden listings', s.hidden_listings],
-    ['Open reports', s.open_reports], ['Completed volume', fmt(s.gross_volume)], ['Platform fees (completed)', fmt(s.platform_fees)],
+    ['Open reports', s.open_reports], ['Verified payment volume', fmt(s.gross_volume)], ['Commission revenue (verified)', fmt(s.platform_fees)],
+    ['Pending owner settlement', fmt(s.pending_settlement ?? 0)], ['Refunded', fmt(s.refunded_total ?? 0)], ['Manual commission accrued (not collected)', fmt(s.manual_commission_accrued ?? 0)],
   ]
   const group = (title: string, m: Record<string, number>) => (
     <div className="card p-4"><h2 className="mb-2 text-lg">{title}</h2>
@@ -71,7 +73,7 @@ export function AdminOverview() {
         {tiles.map(([l, v]) => <li key={l} className="card p-4"><p className="font-sans text-2xl font-bold">{v}</p><p className="text-sm text-ink-soft">{l}</p></li>)}
       </ul>
       <div className="grid gap-3 md:grid-cols-2">{group('Rentals by status', s.rentals)}{group('Orders by status', s.orders)}</div>
-      <p className="text-xs text-ink-mute">“Volume” counts completed transactions only. It is the agreed price, not money processed by BorrowLend (payments are manual in the pilot).</p>
+      <p className="text-xs text-ink-mute">Revenue figures come from the append-only ledger of provider-verified payments (demo and owner-recorded payments are excluded). See the Payments tab for the reconciliation report.</p>
     </div>
   )
 }
@@ -224,7 +226,8 @@ export function AdminSettings() {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setErr('')
-    if (!(v.commission_pct >= 0 && v.commission_pct <= 50)) return setErr('Commission must be between 0 and 50.')
+    if (!(v.rental_commission_pct >= 0 && v.rental_commission_pct <= 50) || !(v.sale_commission_pct >= 0 && v.sale_commission_pct <= 50)) return setErr('Commission rates must be between 0 and 50.')
+    if (v.payments_live && v.payment_provider === 'manual') return setErr('Choose a payment provider before turning live payments on.')
     if (!/^[A-Z]{3}$/.test(v.currency)) return setErr('Currency must be a 3-letter code such as INR or USD.')
     setBusy(true)
     try { await api.admin.updateSettings(v); await reload(); toast('Settings saved.') }
@@ -233,15 +236,37 @@ export function AdminSettings() {
   }
   return (
     <form onSubmit={submit} className="card max-w-lg space-y-4 p-5">
-      <Field label="Platform commission (%)" htmlFor="st-c" hint="Deducted from the owner’s earnings on completed transactions. Snapshotted onto each new request. The default 10% is a development assumption.">
-        <input id="st-c" type="number" step="0.5" min={0} max={50} className="input" value={v.commission_pct} onChange={(e) => setV({ ...v, commission_pct: Number(e.target.value) })} />
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Rental commission (%)" htmlFor="st-rc" hint="Default 15%. Taken from the owner’s earnings on rentals.">
+          <input id="st-rc" type="number" step="0.5" min={0} max={50} className="input" value={v.rental_commission_pct} onChange={(e) => setV({ ...v, rental_commission_pct: Number(e.target.value) })} />
+        </Field>
+        <Field label="Sale commission (%)" htmlFor="st-sc" hint="Default 10%. Taken from the seller’s earnings on sales.">
+          <input id="st-sc" type="number" step="0.5" min={0} max={50} className="input" value={v.sale_commission_pct} onChange={(e) => setV({ ...v, sale_commission_pct: Number(e.target.value) })} />
+        </Field>
+      </div>
+      <p className="-mt-2 text-xs text-ink-mute">Rates are stored on the server and only admins can change them. Each rental/order keeps the rate it was created with, so changing a rate never alters existing deals.</p>
       <Field label="Currency (ISO code)" htmlFor="st-cur">
         <input id="st-cur" className="input" maxLength={3} value={v.currency} onChange={(e) => setV({ ...v, currency: e.target.value.toUpperCase() })} />
       </Field>
       <Field label="Launch city / area" htmlFor="st-city" hint="Shown on the home page.">
         <input id="st-city" className="input" maxLength={80} value={v.launch_city} onChange={(e) => setV({ ...v, launch_city: e.target.value })} />
       </Field>
+      <fieldset className="space-y-3 rounded-xl border border-line p-4">
+        <legend className="px-1 text-sm font-bold">Payments</legend>
+        <Field label="Payment provider" htmlFor="st-prov" hint="Razorpay Route is implemented (untested until you add credentials). Cashfree Easy Split is documented but not implemented. See docs/PAYMENTS.md.">
+          <select id="st-prov" className="input" value={v.payment_provider} onChange={(e) => setV({ ...v, payment_provider: e.target.value as Settings['payment_provider'], payments_live: e.target.value === 'manual' ? false : v.payments_live })}>
+            <option value="manual">Manual / off-platform (no online payments)</option>
+            <option value="razorpay">Razorpay (Route)</option>
+            <option value="cashfree">Cashfree (Easy Split)</option>
+          </select>
+        </Field>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-pine" disabled={v.payment_provider === 'manual' || IS_DEMO} checked={v.payments_live} onChange={(e) => setV({ ...v, payments_live: e.target.checked })} />
+          <span><strong>Live online payments</strong> — turn on only after the provider has approved your marketplace account, business/KYC verification is complete, credentials and webhooks are configured, and payout accounts are active.
+            {IS_DEMO && <em className="block text-xs text-clay-dark">Disabled in demo mode.</em>}</span>
+        </label>
+        <p className="text-xs text-ink-mute">Settlement follows the provider’s standard schedule. BorrowLend does not hold funds until return, and no automatic late/damage fees or deposits are charged.</p>
+      </fieldset>
       {err && <p role="alert" className="text-sm text-red-700">{err}</p>}
       <button className="btn-primary" disabled={busy}>Save settings</button>
     </form>

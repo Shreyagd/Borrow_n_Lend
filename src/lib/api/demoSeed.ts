@@ -1,4 +1,5 @@
 // Clearly-labelled SAMPLE content for demo mode only. Never shipped to a real (Supabase) backend.
+import { openLibraryCoverUrl } from '../covers'
 import type { Condition, Listing, ListingPrivate, ListingType, Profile } from '../types'
 
 export interface DemoAccount {
@@ -32,6 +33,20 @@ export function seedAccounts(): DemoAccount[] {
 
 type Row = [string, string, string, string, Condition, ListingType, number | null, number | null, string, string, number]
 // owner, title, author, category, condition, type, weekly rent, sale, area, description, daysAgo
+// Title -> ISBN for sample books whose Open Library cover was verified. Others keep the placeholder cover.
+const ISBN: Record<string, string> = {
+  'Pride and Prejudice': '9780141439518',
+  'Atomic Habits': '9781847941831',
+  'Sapiens: A Brief History of Humankind': '9780099590088',
+  'The Alchemist': '9780062315007',
+  'Charlotte’s Web': '9780064400558',
+  'The Psychology of Money': '9780857197689',
+  'Introduction to Algorithms': '9780262046305',
+  'Persepolis': '9780375714832',
+  'Wings of Fire': '9788173711466',
+  'A Brief History of Time': '9780553380163',
+}
+
 const ROWS: Row[] = [
   ['u-asha', 'Pride and Prejudice', 'Jane Austen', 'Fiction', 'good', 'both', 40, 180, 'Sample Area – Central', 'A classic of English literature. Paperback, light shelf wear.', 1],
   ['u-asha', 'Atomic Habits', 'James Clear', 'Self-Help', 'like_new', 'both', 60, 260, 'Sample Area – Central', 'Read once. No highlighting.', 2],
@@ -54,7 +69,8 @@ export function seedListings(): { listings: Listing[]; priv: Record<string, List
     const [owner, title, author, category, condition, type, rent, sale, area, description, ago] = r
     const id = `l-sample-${i + 1}`
     listings.push({
-      id, owner_id: owner, title, author, isbn: null, category, description, condition, image_urls: [],
+      id, owner_id: owner, title, author, isbn: ISBN[title] ?? null, category, description, condition,
+      image_urls: ISBN[title] ? [openLibraryCoverUrl(ISBN[title])] : [],
       listing_type: type, rental_price: rent, rental_period_options: type === 'sale' ? [] : [7, 14, 21],
       sale_price: sale, pickup_area: area, status: 'active', hidden: false, flagged: false,
       created_at: daysAgo(ago), updated_at: daysAgo(ago), is_sample: true,

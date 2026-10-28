@@ -3,13 +3,16 @@ import { ErrorState, LoadingState } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 import { useAsync, usePageMeta } from '../../lib/hooks'
-import type { Listing, Order, Rental } from '../../lib/types'
+import type { Listing, Order, Payment, Rental } from '../../lib/types'
 
 export interface DashData {
   me: string
   listings: Listing[]
   rentals: Rental[]
   orders: Order[]
+  /** payments I made (as customer) and payments made to me (as owner) */
+  paid: Payment[]
+  received: Payment[]
   reload: () => void
 }
 export const useDash = () => useOutletContext<DashData>()
@@ -20,6 +23,7 @@ const tabs: [string, string, boolean?][] = [
   ['/dashboard/requests', 'Requests'],
   ['/dashboard/borrowings', 'Borrowings'],
   ['/dashboard/purchases', 'Purchases'],
+  ['/dashboard/payments', 'Payments'],
   ['/dashboard/earnings', 'Earnings'],
 ]
 
@@ -28,8 +32,10 @@ export default function DashboardLayout() {
   const { user, profile } = useAuth()
   const res = useAsync(async () => {
     await api.rentals.markOverdue().catch(() => {})
-    const [listings, rentals, orders] = await Promise.all([api.listings.mine(), api.rentals.mine(), api.orders.mine()])
-    return { listings, rentals, orders }
+    const [listings, rentals, orders, paid, received] = await Promise.all([
+      api.listings.mine(), api.rentals.mine(), api.orders.mine(), api.payments.mine(), api.payments.forOwner(),
+    ])
+    return { listings, rentals, orders, paid, received }
   }, [user?.id])
 
   return (

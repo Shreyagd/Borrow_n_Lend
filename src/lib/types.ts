@@ -5,7 +5,17 @@ export type RentalStatus =
   | 'requested' | 'accepted' | 'declined' | 'cancelled' | 'active'
   | 'return_requested' | 'completed' | 'overdue' | 'disputed'
 export type OrderStatus = 'requested' | 'accepted' | 'declined' | 'cancelled' | 'completed' | 'disputed'
-export type PaymentStatus = 'pending' | 'received'
+/**
+ * `paid` is set ONLY by server-side provider verification (signed webhook / provider API fetch).
+ * `manual_received` is an owner's unverified note that money changed hands off-platform.
+ * `demo_simulated` never represents real money.
+ */
+export type PaymentStatus =
+  | 'unpaid' | 'awaiting_payment' | 'paid' | 'failed' | 'refund_pending' | 'partially_refunded' | 'refunded'
+  | 'manual_received' | 'demo_simulated'
+export type SettlementStatus = 'not_due' | 'pending' | 'processing' | 'settled' | 'failed' | 'reversed'
+export type PaymentProvider = 'manual' | 'razorpay' | 'cashfree'
+export type TxKindT = 'rental' | 'order'
 
 export interface Profile {
   id: string
@@ -78,9 +88,11 @@ export interface Rental {
   due_date: string | null
   rental_amount: number
   platform_fee: number
+  commission_pct: number
   deposit_amount: number
   status: RentalStatus
   payment_status: PaymentStatus
+  settlement_status: SettlementStatus
   decline_reason: string | null
   owner_handover_confirmed_at: string | null
   borrower_handover_confirmed_at: string | null
@@ -101,10 +113,12 @@ export interface Order {
   buyer_id: string
   item_price: number
   platform_fee: number
+  commission_pct: number
   delivery_fee: number
   total_amount: number
   status: OrderStatus
   payment_status: PaymentStatus
+  settlement_status: SettlementStatus
   handover_method: 'local_pickup'
   decline_reason: string | null
   seller_confirmed_at: string | null
@@ -166,9 +180,105 @@ export interface ReviewSummary {
 }
 
 export interface Settings {
-  commission_pct: number
+  /** Server-controlled. Read-only in the browser; only admins can change it (RLS). */
+  rental_commission_pct: number
+  sale_commission_pct: number
   currency: string
   launch_city: string
+  payment_provider: PaymentProvider
+  /** True only after provider approval + credentials are configured. */
+  payments_live: boolean
+}
+
+export type PaymentRecordStatus = 'created' | 'captured' | 'failed' | 'refund_pending' | 'partially_refunded' | 'refunded'
+export interface Payment {
+  id: string
+  tx_kind: TxKindT
+  tx_id: string
+  payer_id: string
+  owner_id: string
+  provider: 'razorpay' | 'cashfree' | 'manual' | 'demo'
+  provider_order_id: string | null
+  provider_payment_id: string | null
+  method: string | null
+  /** Gross amount the customer pays. */
+  amount: number
+  currency: string
+  commission_amount: number
+  owner_net_amount: number
+  refunded_amount: number
+  status: PaymentRecordStatus
+  is_demo: boolean
+  failure_reason: string | null
+  created_at: string
+  captured_at: string | null
+  // joined for display
+  title?: string
+  payer_name?: string
+  owner_name?: string
+  settlement_status?: SettlementStatus
+}
+
+export type LedgerEntryType =
+  | 'gross_captured' | 'platform_commission' | 'owner_earning'
+  | 'refund_gross' | 'commission_reversal' | 'owner_earning_reversal' | 'owner_payout'
+export interface LedgerEntry {
+  id: string
+  seq: number
+  tx_kind: TxKindT
+  tx_id: string
+  payment_id: string | null
+  entry_type: LedgerEntryType
+  user_id: string | null
+  amount: number
+  currency: string
+  is_demo: boolean
+  memo: string | null
+  created_at: string
+  idempotency_key?: string
+}
+
+export interface PayoutAccount {
+  owner_id: string
+  owner_name?: string
+  provider: 'razorpay' | 'cashfree'
+  provider_account_id: string | null
+  status: 'not_started' | 'pending' | 'active' | 'rejected'
+  updated_at: string
+}
+
+export interface PayStart {
+  mode: 'demo' | 'provider'
+  provider: 'razorpay' | 'cashfree' | 'demo'
+  payment_id: string
+  amount: number
+  currency: string
+  commission: number
+  owner_net: number
+  /** provider checkout parameters (never contains secrets) */
+  order_id?: string
+  key_id?: string
+}
+
+export interface ReconciliationIssue {
+  severity: 'error' | 'warning'
+  code: string
+  message: string
+  ref?: string
+}
+export interface ReconciliationReport {
+  generated_at: string
+  totals: {
+    gross_captured: number
+    refunded: number
+    commission_revenue: number
+    owner_earned: number
+    owner_paid_out: number
+    pending_settlement: number
+    demo_gross: number
+    manual_commission_accrued: number
+  }
+  issues: ReconciliationIssue[]
 }
 
 export interface ListingFilters {
@@ -198,6 +308,9 @@ export interface AdminStats {
   open_reports: number
   gross_volume: number
   platform_fees: number
+  refunded_total?: number
+  pending_settlement?: number
+  manual_commission_accrued?: number
 }
 
 export interface EarningsRow {
@@ -208,13 +321,24 @@ export interface EarningsRow {
   gross: number
   fee: number
   net: number
-  status: string
+  txStatus: string
   payment_status: PaymentStatus
+  settlement_status: SettlementStatus
+  /** provider-verified money vs. an unverified/demo record */
+  basis: 'verified' | 'manual' | 'demo' | 'unpaid'
 }
 export interface Earnings {
+  /** Provider-verified payments only (real money). */
   gross: number
-  fees: number
+  commission: number
   net: number
-  pending_net: number
+  refunded: number
+  pendingSettlement: number
+  settled: number
+  /** Completed deals the owner marked as paid off-platform. Unverified; commission is owed, not collected. */
+  manualNet: number
+  manualCommissionOwed: number
+  /** Expected earnings from deals not yet paid. */
+  expectedNet: number
   rows: EarningsRow[]
 }

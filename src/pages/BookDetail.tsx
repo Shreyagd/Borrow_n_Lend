@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { BookCover } from '../components/BookCover'
-import { ManualPaymentNotice, PriceBreakdown } from '../components/PriceBreakdown'
+import { PaymentNotice, PriceBreakdown } from '../components/PriceBreakdown'
 import { ReportDialog } from '../components/ReportDialog'
 import { BackLink, EmptyState, ErrorState, LoadingState, Modal, Spinner, StatusChip } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -49,8 +49,8 @@ export default function BookDetail() {
   const canRent = l.listing_type !== 'sale' && l.rental_price != null
   const canBuy = l.listing_type !== 'rent' && l.sale_price != null
   const available = l.status === 'active'
-  const rb = canRent && days ? rentalBreakdown(l, days, settings.commission_pct) : null
-  const sb = canBuy ? saleBreakdown(l, settings.commission_pct) : null
+  const rb = canRent && days ? rentalBreakdown(l, days, settings.rental_commission_pct) : null
+  const sb = canBuy ? saleBreakdown(l, settings.sale_commission_pct) : null
 
   const submit = async () => {
     setBusy(true); setError('')
@@ -206,7 +206,7 @@ export default function BookDetail() {
             </div>
             {confirm === 'rent' && rb && <PriceBreakdown b={rb} />}
             {confirm === 'buy' && sb && <PriceBreakdown b={sb} />}
-            <ManualPaymentNotice />
+            <PaymentNotice />
             {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
             <div className="flex justify-end gap-2">
               <button className="btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>

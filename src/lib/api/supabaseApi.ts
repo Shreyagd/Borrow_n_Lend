@@ -3,8 +3,8 @@ import { compressImage } from '../image'
 import { normalizeListingInput } from '../rules'
 import { supabase } from '../supabase'
 import type {
-  AdminStats, HandoverInfo, Listing, ListingFilters, ListingInput, ListingPrivate, Notification, Order, Profile,
-  PublicReview, Rental, Report, ReviewSummary, Settings,
+  AdminStats, HandoverInfo, LedgerEntry, Listing, ListingFilters, ListingInput, ListingPrivate, Notification, Order, Profile,
+  PayStart, Payment, PayoutAccount, PublicReview, ReconciliationReport, Rental, Report, ReviewSummary, Settings,
 } from '../types'
 import type { Api, TxKind } from './types'
 
@@ -16,6 +16,28 @@ function fail(error: { message: string } | null): never {
 function ok<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) fail(res.error)
   return res.data as T
+}
+
+/** Calls a payment Edge Function and surfaces its JSON error message. */
+async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(name, { body })
+  if (error) {
+    let msg = error.message
+    try { const j = await (error as unknown as { context: Response }).context.json(); if (j?.error) msg = j.error } catch { /* keep default */ }
+    throw new Error(msg)
+  }
+  return data as T
+}
+
+const PAYMENT_SELECT = '*, rental:rentals(settlement_status, listing:listings(title)), order:orders(settlement_status, listing:listings(title)), payer:profiles!payments_payer_id_fkey(display_name), owner:profiles!payments_owner_id_fkey(display_name)'
+function mapPayment(row: any): Payment {
+  const tx = row.rental ?? row.order
+  const { payer, owner } = row
+  const rest = { ...row }
+  for (const k of ['rental', 'order', 'payer', 'owner']) delete rest[k]
+  return { ...rest, amount: Number(row.amount), commission_amount: Number(row.commission_amount), owner_net_amount: Number(row.owner_net_amount),
+    refunded_amount: Number(row.refunded_amount), title: tx?.listing?.title, payer_name: payer?.display_name, owner_name: owner?.display_name,
+    settlement_status: tx?.settlement_status } as Payment
 }
 
 async function uid(): Promise<string> {
@@ -104,7 +126,7 @@ export const supabaseApi: Api = {
 
   settings: {
     async get() {
-      return ok(await supabase.from('admin_settings').select('commission_pct,currency,launch_city').eq('id', 1).single()) as Settings
+      return ok(await supabase.from('admin_settings').select('rental_commission_pct,sale_commission_pct,currency,launch_city,payment_provider,payments_live').eq('id', 1).single()) as Settings
     },
   },
 
@@ -252,6 +274,26 @@ export const supabaseApi: Api = {
     },
   },
 
+  payments: {
+    async start(kind, id) { return invoke<PayStart>('create-payment-order', { kind, tx_id: id }) },
+    async verify(kind, id, proof) {
+      return invoke<{ status: string }>('verify-payment', { kind, tx_id: id, razorpay_payment_id: proof?.payment_id, razorpay_signature: proof?.signature })
+    },
+    async mine() {
+      const me = await uid()
+      return (ok(await supabase.from('payments').select(PAYMENT_SELECT).eq('payer_id', me).order('created_at', { ascending: false })) as any[]).map(mapPayment)
+    },
+    async forOwner() {
+      const me = await uid()
+      return (ok(await supabase.from('payments').select(PAYMENT_SELECT).eq('owner_id', me).order('created_at', { ascending: false })) as any[]).map(mapPayment)
+    },
+    async payoutAccount() {
+      const me = await uid()
+      const { data } = await supabase.from('payout_accounts').select('*').eq('owner_id', me).maybeSingle()
+      return (data as PayoutAccount | null) ?? null
+    },
+  },
+
   reviews: {
     async recent(n) {
       const rows = ok(await supabase.from('reviews')
@@ -329,5 +371,22 @@ export const supabaseApi: Api = {
     async updateSettings(s) {
       ok(await supabase.from('admin_settings').update({ ...s, updated_at: new Date().toISOString() }).eq('id', 1).select('id').single())
     },
+    async payments() {
+      return (ok(await supabase.from('payments').select(PAYMENT_SELECT).order('created_at', { ascending: false }).limit(500)) as any[]).map(mapPayment)
+    },
+    async ledger(limit = 200) {
+      return ok(await supabase.from('ledger_entries').select('*').order('seq', { ascending: false }).limit(limit)) as LedgerEntry[]
+    },
+    async reconciliation() { return ok(await supabase.rpc('admin_reconciliation')) as ReconciliationReport },
+    async refund(paymentId, amount, reason) { await invoke('refund-payment', { payment_id: paymentId, amount, reason }) },
+    async payoutAccounts() {
+      const rows = ok(await supabase.from('payout_accounts').select('*, owner:profiles!payout_accounts_owner_id_fkey(display_name)')) as any[]
+      return rows.map((r) => ({ ...r, owner_name: r.owner?.display_name })) as PayoutAccount[]
+    },
+    async setPayoutAccount(ownerId, provider, accountId, status) {
+      const { error } = await supabase.rpc('admin_set_payout_account', { p_owner: ownerId, p_provider: provider, p_account: accountId, p_status: status })
+      if (error) fail(error)
+    },
+    async reconcileSettlements() { return invoke<{ checked: number; updated: number }>('reconcile-settlements', {}) },
   },
 }
